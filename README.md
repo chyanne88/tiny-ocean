@@ -2,7 +2,7 @@
 
 A small game about emergent order: guide a school of fish home to a glowing reef. You can't steer the fish. You only hold a light, and the school decides for itself what to do with it.
 
-**Play:** (https://chyanne88.github.io/tiny-ocean/ )
+**Play:** https://chyanne88.github.io/tiny-ocean/
 
 ![teaser](teaser/teaser.gif)
 
@@ -48,12 +48,3 @@ One file, `index.html`, with no libraries. It uses a small hand-written WebGL2 r
 - The fish simulation runs in plain JavaScript and uses a spatial grid so that around 200 fish stay fast.
 
 It needs a browser with WebGL2. Any recent Chrome, Edge, Firefox or Safari works.
-
-## Publish on GitHub Pages
-
-1. Upload `index.html`, `README.md` and the `teaser/` folder to a public repository.
-2. Go to **Settings → Pages → Deploy from a branch**, choose `main` and `/ (root)`, then click Save.
-3. Replace the link at the top of this file with your site address.
-
----
-Coding for Design 1 · Cornell AAP · Fall 2026 · made with Claude
