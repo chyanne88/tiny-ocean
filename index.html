@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiny Ocean</title>
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#1d6f9c;color:#fff;overflow:hidden;
+    font-family:'Josefin Sans',system-ui,sans-serif;font-weight:300;-webkit-user-select:none;user-select:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:none;touch-action:none}
+  .shade{text-shadow:0 1px 12px rgba(0,40,70,.45)}
+
+  .hud{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;padding:22px 28px;pointer-events:none}
+  .brand{font-size:15px;letter-spacing:.55em;text-transform:uppercase}
+  .brand small{display:block;font-size:10px;letter-spacing:.4em;opacity:.75;margin-top:8px}
+  .stats{display:flex;gap:26px;align-items:center;font-size:12px;letter-spacing:.22em;text-transform:uppercase}
+  .stat b{font-weight:400;font-size:16px;letter-spacing:.06em;margin-left:6px;font-variant-numeric:tabular-nums}
+  .bar{position:relative;width:120px;height:2px;background:rgba(255,255,255,.3);margin-top:8px}
+  .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:#fff;transition:width .4s}
+  .bar em{position:absolute;top:-4px;width:1px;height:10px;background:#ffe3a8}
+
+  .tip{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);font-size:12px;letter-spacing:.2em;text-transform:uppercase;
+    opacity:.85;pointer-events:none;transition:opacity 1s;white-space:nowrap}
+  .warn{position:fixed;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;
+    border:1px solid rgba(255,140,120,.9);box-shadow:0 0 18px rgba(255,120,100,.7);animation:pulse .5s infinite alternate}
+  .warn::after{content:'';position:absolute;inset:11px;border-radius:50%;background:rgba(255,140,120,.95)}
+  @keyframes pulse{from{transform:scale(.85);opacity:.6}to{transform:scale(1.1);opacity:1}}
+
+  .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 35%, rgba(120,210,240,.10), rgba(5,40,70,.55));transition:opacity .8s}
+  .overlay.hide{opacity:0;pointer-events:none}
+  .card{max-width:620px;width:calc(100% - 40px);text-align:center}
+  .card h1{font-weight:200;font-size:60px;letter-spacing:.5em;margin-right:-.5em;text-transform:uppercase}
+  .card h2{font-weight:200;font-size:40px;letter-spacing:.45em;margin-right:-.45em;text-transform:uppercase;margin-bottom:14px}
+  .line{width:60px;height:1px;background:rgba(255,255,255,.6);margin:22px auto}
+  .sub{font-size:15px;line-height:1.8;letter-spacing:.08em;opacity:.95}
+  .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:18px 26px;text-align:left;margin:30px 0 34px;font-size:12.5px;line-height:1.5;letter-spacing:.04em}
+  .rules b{display:block;font-weight:400;font-size:11px;letter-spacing:.32em;text-transform:uppercase;margin-bottom:4px;opacity:.9}
+  .rules div{border-top:1px solid rgba(255,255,255,.3);padding-top:9px}
+  button.go{all:unset;cursor:pointer;font-size:13px;letter-spacing:.5em;text-transform:uppercase;padding:15px 40px 13px 46px;
+    border:1px solid rgba(255,255,255,.75);transition:background .3s,color .3s}
+  button.go:hover{background:#fff;color:#155f8a}
+  .big{font-size:14px;letter-spacing:.18em;text-transform:uppercase;margin:0 0 30px;opacity:.9}
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:30px;font-size:15px;letter-spacing:.06em;background:#1d6f9c}
+  @media (max-width:700px){ .rules{grid-template-columns:1fr 1fr} .card h1{font-size:30px} .stats{gap:12px} .stats .stat:nth-child(3){display:none} .tip{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud shade">
+  <div class="brand">Tiny Ocean<small id="lvlLabel">Level 1</small></div>
+  <div class="stats">
+    <div class="stat">Home<b id="sHome">0</b><b style="opacity:.55;margin-left:4px">/ <span id="sTarget">0</span></b>
+      <div class="bar"><i id="barFill"></i><em id="barMark"></em></div></div>
+    <div class="stat">Swimming<b id="sAlive">0</b></div>
+    <div class="stat">Lost<b id="sLost">0</b></div>
+  </div>
+</div>
+<div class="tip shade" id="tip">Move the light · the school follows · click to flash</div>
+
+<div class="overlay" id="start">
+  <div class="card shade">
+    <h1>Tiny Ocean</h1>
+    <div class="line"></div>
+    <p class="sub">A school of fish has lost its way.<br>You can't steer them. You can only carry a light.</p>
+    <div class="rules">
+      <div><b>Follow</b>swim the way nearby fish swim</div>
+      <div><b>Avoid</b>keep a little space</div>
+      <div><b>Together</b>drift toward the group</div>
+      <div><b>Light</b>swim toward the glow</div>
+      <div><b>Flee</b>a shark? swim away, fast</div>
+      <div><b>Panic</b>fear passes fish to fish</div>
+    </div>
+    <button class="go" id="startBtn">Dive</button>
+  </div>
+</div>
+
+<div class="overlay hide" id="end">
+  <div class="card shade">
+    <h2 id="endTitle">Home</h2>
+    <div class="big" id="endText"></div>
+    <button class="go" id="endBtn">Next</button>
+  </div>
+</div>
+<div id="err">This piece needs WebGL2. Please open it in a recent Chrome, Edge, Firefox or Safari.</div>
+
+<script>
+/* =====================================================================
+   TINY OCEAN
+   You carry a light. Fish follow six simple, local rules:
+     1. AVOID     – don't crowd: push away from fish too close
+     2. FOLLOW    – match the heading of nearby fish
+     3. TOGETHER  – drift toward the centre of nearby fish
+     4. LIGHT     – swim toward the light if you can see it
+     5. FLEE      – see a shark? swim directly away, much faster
+     6. PANIC     – fear spreads from fish to neighbour, fading over time
+   Nobody knows where home is. The school is the emergent result.
+
+   Rendering: a tiny hand-written WebGL2 renderer (no libraries).
+   - the sea, seabed, sunlit surface and rock arches are ray-marched in one shader
+   - fish, shark and coral are low-poly meshes lit by the sun, caustics and your light
+   ===================================================================== */
+
+const cv = document.getElementById('c');
+const CAPTURE = new URLSearchParams(location.search).has('capture');
+const gl = cv.getContext('webgl2', { antialias: true, preserveDrawingBuffer: CAPTURE, alpha: false });
+if (!gl) document.getElementById('err').style.display = 'flex';
+
+const $ = id => document.getElementById(id);
+const rand = (a,b) => a + Math.random()*(b-a);
+const lerp = (a,b,k) => a + (b-a)*k;
+
+// ---------------- world / camera ----------------
+// The play plane is z = 0. The camera looks straight at it from z = D with an
+// off-centre frustum, so the seabed horizon sits low on screen (like looking up).
+const D = 100, YT = 50, YB = -30;         // world y at top / bottom of screen on the play plane
+let W, H, DPR, HALFW, K;                  // K = world units per CSS pixel
+const SUN = norm([0.0, 1.0, -0.42]);
+function norm(v){ const l = Math.hypot(...v); return v.map(x=>x/l); }
+const wx = px => (px/W*2-1)*HALFW;
+const wy = py => YT - py/H*(YT-YB);
+
+let t = 0;   // frame counter; shader time = t/60
+
+// ---------------- GL helpers ----------------
+function sh(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s), src.split('\n').map((l,i)=>(i+1)+': '+l).join('\n')); }
+  return s;
+}
+function prog(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p));
+  p.u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i=0;i<n;i++){ const info = gl.getActiveUniform(p,i); p.u[info.name.replace('[0]','')] = gl.getUniformLocation(p, info.name); }
+  return p;
+}
+function buf(data, usage=gl.STATIC_DRAW){ const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, usage); return b; }
+function attr(loc, b, size, divisor=0, stride=0, offset=0){
+  if (loc < 0) return;
+  gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, offset); gl.vertexAttribDivisor(loc, divisor);
+}
+
+// ---------------- shared GLSL ----------------
+const COMMON = `
+precision highp float;
+uniform vec3 uCam; uniform vec3 uSun; uniform float uTime; uniform vec4 uLamp; uniform float uYb;
+float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
+float fbm(vec2 p){ float a=.5, s=0.; for(int i=0;i<4;i++){ s+=a*noise(p); p=p*2.03+17.1; a*=.5; } return s; }
+// tileable water caustics (after Dave Hoskins)
+float caustic(vec2 uv, float time){
+  vec2 p = mod(uv*6.28318, 6.28318) - 250.0; vec2 i = p; float c = 1.0; float inten = .005;
+  for (int n = 0; n < 4; n++){ float tt = time*(1.0 - (3.5/float(n+1)));
+    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+    c += 1.0/length(vec2(p.x/(sin(i.x+tt)/inten), p.y/(cos(i.y+tt)/inten))); }
+  c /= 4.0; c = 1.17 - pow(c, 1.4); return pow(abs(c), 8.0);
+}
+vec3 waterCol(vec3 rd){
+  vec3 deep = vec3(0.03,0.22,0.42), mid = vec3(0.10,0.47,0.70), hi = vec3(0.42,0.80,0.93);
+  vec3 c = mix(deep, mid, smoothstep(-0.35, 0.03, rd.y));
+  c = mix(c, hi, smoothstep(0.03, 0.5, rd.y));
+  c += vec3(0.85,1.0,1.0) * pow(max(dot(rd, uSun), 0.), 5.) * 0.35;
+  return c;
+}
+float fogAmt(float d){ return 1.0 - exp(-max(d-95.0, 0.0) * 0.0042); }
+vec3 lampLight(vec3 p){ float d = length(p - uLamp.xyz); return vec3(1.0,0.86,0.62) * uLamp.w * 1.6 / (1.0 + d*d*0.02); }
+`;
+
+// ---------------- 1. ENVIRONMENT (ray-marched) ----------------
+const ENV_VS = `#version 300 es
+in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos*0.5+0.5; gl_Position = vec4(aPos,0,1); }`;
+const ENV_FS = `#version 300 es
+${COMMON}
+in vec2 vUv; out vec4 o;
+uniform float uHalfW, uYt, uD; uniform vec4 uRocks[6]; uniform vec4 uRockShape[6]; uniform vec4 uArch;
+
+// rock pillars: pos.xyz + height ; shape: base radius, waist radius, cap radius, seed
+float lumps(vec3 p){
+  return sin(p.x*0.31 + sin(p.z*0.27))*sin(p.y*0.23 + sin(p.x*0.19))*sin(p.z*0.29 + sin(p.y*0.21))
+       + 0.5*sin(p.x*0.71 + p.y*0.4)*sin(p.z*0.63 - p.y*0.3);
+}
+float sdPillar(vec3 p, vec4 r, vec4 s){
+  p -= r.xyz; float k = clamp(p.y / r.w, 0., 1.);
+  float rad = mix(s.x, s.y, smoothstep(0., .55, k));
+  rad = mix(rad, s.z, smoothstep(.72, .93, k));
+  rad *= 1. - smoothstep(.93, 1.0, k)*0.25;
+  float a = atan(p.z, p.x);
+  rad += sin(p.y*1.9 + s.w)*0.18;                                   // fine strata
+  rad += lumps(p*0.9 + s.w*7.)*2.2 + sin(a*2. + p.y*0.05 + s.w)*1.6;  // organic lumps
+  float d = length(p.xz) - rad;
+  d = max(d, p.y - r.w - (p.x*0.12 + sin(p.z*.2+s.w)*1.5));          // tilted, uneven top
+  return d*0.6;
+}
+float sdArch(vec3 p){
+  p -= uArch.xyz; p.x *= 0.85;
+  vec2 q = vec2(length(p.xy) - uArch.w, p.z);
+  float ang = atan(p.y,p.x);
+  float d = length(q*vec2(1.0, 0.55)) - (6.0 + sin(ang*2.+1.)*2.0);
+  d += lumps(p*0.8)*2.4 + sin(p.y*1.9)*0.15;
+  return d*0.6;
+}
+float map(vec3 p){
+  float d = sdArch(p);
+  for (int i=0;i<6;i++){ if (uRocks[i].w <= 0.) continue; d = min(d, sdPillar(p, uRocks[i], uRockShape[i])); }
+  return max(d, uYb - 2. - p.y);
+}
+vec3 calcN(vec3 p){ const vec2 e = vec2(0.15, -0.15);
+  return normalize(e.xyy*map(p+e.xyy) + e.yyx*map(p+e.yyx) + e.yxy*map(p+e.yxy) + e.xxx*map(p+e.xxx)); }
+
+vec3 seabed(vec3 p, float dist){
+  vec2 q = p.xz;
+  float lod = smoothstep(320., 70., dist);
+  float big = fbm(q*0.018);
+  float paths = smoothstep(0.06, 0.02, abs(fbm(q*0.011 + 3.1) - 0.5));
+  float patchY = smoothstep(0.60, 0.66, fbm(q*0.03 + 7.3));
+  float moss  = smoothstep(0.62, 0.70, fbm(q*0.025 - 4.2));
+  vec3 pink = mix(vec3(0.86,0.46,0.58), vec3(0.96,0.63,0.69), big);
+  float grass = noise(q*vec2(2.2, 0.9)) * lod;          // fine grass streaks
+  pink *= 0.86 + 0.24*grass;
+  vec3 c = pink;
+  c = mix(c, vec3(0.32,0.70,0.66), moss*0.85);
+  c = mix(c, vec3(0.98,0.80,0.42)*(0.9+0.15*grass), patchY);
+  c = mix(c, vec3(0.97,0.92,0.87)*(0.95+0.07*noise(q*1.3)), paths);
+  float bump = (fbm(q*0.09) - 0.5) * lod;
+  float lit = 0.85 + bump*0.5;
+  float ca = caustic(q*0.028, uTime*0.45) * (0.4 + 0.6*lod);
+  c = c*lit + vec3(0.85,1.0,1.0)*ca*0.55;
+  c += lampLight(p) * c * 0.9;
+  return c;
+}
+vec3 rockShade(vec3 p, vec3 n){
+  float strata = smoothstep(0.82, 0.97, sin(p.y*1.9 + 0.8*sin(p.x*0.1+p.z*0.07))*0.5+0.5);
+  vec3 c = mix(vec3(0.16,0.52,0.57), vec3(0.12,0.44,0.5), strata*0.35);
+  float top = smoothstep(0.45, 0.85, n.y) * smoothstep(0.35, 0.55, noise(p.xz*0.25));
+  c = mix(c, vec3(0.88,0.47,0.58), top*0.85);
+  float dif = clamp(dot(n, uSun)*0.55 + 0.55, 0., 1.);
+  c *= 0.5 + 0.7*dif;
+  c += vec3(0.8,1.0,1.0) * caustic(p.xz*0.03 + p.y*0.004, uTime*0.45) * max(n.y, 0.) * 0.45;
+  c += vec3(0.1,0.25,0.3)*(1.-dif);
+  return c;
+}
+vec3 surface(vec3 p, vec3 rd, float dist){
+  vec3 c = vec3(0.62,0.92,0.99);
+  float r = caustic(p.xz*0.006, uTime*0.3);
+  float r2 = caustic(p.xz*0.013 + 0.3, uTime*0.42);
+  float near = exp(-dist*0.0018);
+  c += vec3(1.0)*(r*0.7 + r2*0.5) * near;
+  float window = smoothstep(0.55, 0.97, dot(rd, uSun));
+  c = mix(c, vec3(1.0), window*0.85);
+  return c;
+}
+void main(){
+  vec3 ro = vec3(0., 0., uD);
+  vec3 P = vec3(mix(-uHalfW, uHalfW, vUv.x), mix(uYb, uYt, vUv.y), 0.);
+  vec3 rd = normalize(P - ro);
+  vec3 wcol = waterCol(rd);
+  float tSea = rd.y < 0. ? (uYb - ro.y) / rd.y : 1e5;
+  float ySurf = 170.;
+  float tSurf = rd.y > 0. ? (ySurf - ro.y) / rd.y : 1e5;
+  float tMax = min(min(tSea, tSurf), 900.);
+  float tt = 60., hit = -1.;
+  for (int i=0;i<90;i++){
+    vec3 p = ro + rd*tt; float d = map(p);
+    if (d < 0.0006*tt + 0.03){ hit = tt; break; }
+    tt += d; if (tt > tMax) break;
+  }
+  vec3 col; float dist;
+  if (hit > 0.){ vec3 p = ro + rd*hit; col = rockShade(p, calcN(p)); dist = hit; }
+  else if (tSea < tSurf && tSea < 900.){ vec3 p = ro + rd*tSea; col = seabed(p, tSea); dist = tSea; }
+  else if (tSurf < 1e4){ vec3 p = ro + rd*tSurf; col = surface(p, rd, tSurf); dist = tSurf*0.62; }
+  else { col = wcol; dist = 1e4; }
+  col = mix(col, wcol, fogAmt(dist));
+  o = vec4(col, 1.);
+}`;
+
+// ---------------- 2. MESHES (static coral + instanced fish/shark) ----------------
+const MESH_COMMON_FS = `
+vec3 shade(vec3 base, vec3 wp, vec3 n, float spec, float emis){
+  vec3 V = normalize(uCam - wp);
+  if (dot(n, V) < 0.) n = -n;
+  float dif = clamp(dot(n, uSun)*0.6 + 0.5, 0., 1.);
+  vec3 c = base * (0.42 + 0.75*dif);
+  c += vec3(0.08,0.22,0.3) * (1. - dif) * 0.8;
+  vec3 R = reflect(-uSun, n);
+  c += vec3(0.9,1.0,1.0) * pow(max(dot(R, V), 0.), 18.) * spec;
+  c += vec3(0.7,0.95,1.0) * pow(1. - max(dot(n, V), 0.), 3.) * 0.18 * spec;
+  c += vec3(0.85,1.0,1.0) * caustic(vec2(wp.x, wp.z + wp.y*0.6)*0.03, uTime*0.45) * max(n.y,0.) * 0.5;
+  c += lampLight(wp) * base;
+  c += base * emis;
+  float d = length(wp - uCam);
+  return mix(c, waterCol(normalize(wp - uCam)), fogAmt(d) + 0.06);
+}`;
+const STATIC_VS = `#version 300 es
+in vec3 aPos; in vec3 aNor; in vec3 aCol;
+uniform mat4 uProj, uView;
+out vec3 vW, vN, vC;
+void main(){ vW = aPos; vN = aNor; vC = aCol; gl_Position = uProj * uView * vec4(aPos, 1.); }`;
+const STATIC_FS = `#version 300 es
+${COMMON}
+${MESH_COMMON_FS}
+in vec3 vW, vN, vC; out vec4 o;
+void main(){ o = vec4(shade(vC, vW, normalize(vN), 0.15, 0.), 1.); }`;
+
+const FISH_VS = `#version 300 es
+in vec3 aPos; in vec3 aNor; in vec3 aCol;
+in vec3 iPos; in vec3 iRot; in vec4 iTint;
+uniform mat4 uProj, uView; uniform float uWag;
+out vec3 vW, vN, vC;
+void main(){
+  vec3 p = aPos, n = aNor;
+  float tailw = clamp(0.55 - p.x, 0., 2.);
+  p.z += sin(iTint.w - p.x*2.6) * uWag * tailw;
+  float cr = cos(iRot.y), sr = sin(iRot.y);
+  p = vec3(p.x, p.y*cr - p.z*sr, p.y*sr + p.z*cr);  n = vec3(n.x, n.y*cr - n.z*sr, n.y*sr + n.z*cr);
+  float ca = cos(iRot.x), sa = sin(iRot.x);
+  p = vec3(p.x*ca - p.y*sa, p.x*sa + p.y*ca, p.z);   n = vec3(n.x*ca - n.y*sa, n.x*sa + n.y*ca, n.z);
+  vW = p * iRot.z + iPos; vN = n; vC = aCol * iTint.rgb;
+  gl_Position = uProj * uView * vec4(vW, 1.);
+}`;
+const FISH_FS = `#version 300 es
+${COMMON}
+${MESH_COMMON_FS}
+uniform float uSpec;
+in vec3 vW, vN, vC; out vec4 o;
+void main(){ o = vec4(shade(vC, vW, normalize(vN), uSpec, 0.), 1.); }`;
+
+// ---------------- 3. POINTS (marine snow, coral sparkles, bubbles) ----------------
+const PTS_VS = `#version 300 es
+in vec3 aPos; in vec2 aInfo;
+uniform mat4 uProj, uView; uniform float uPx; uniform float uTime; uniform float uMode;
+out float vA;
+void main(){
+  vec4 v = uView * vec4(aPos, 1.);
+  gl_Position = uProj * v;
+  float d = -v.z;
+  gl_PointSize = clamp(aInfo.x * uPx / d, 1.0, 64.0);
+  float tw = uMode > 0.5 && uMode < 1.5 ? pow(0.5+0.5*sin(uTime*2.3 + aInfo.y*6.28), 6.) : 1.0;
+  vA = tw * exp(-max(d-95.,0.)*0.006);
+}`;
+const PTS_FS = `#version 300 es
+precision highp float; in float vA; out vec4 o; uniform vec3 uCol; uniform float uMode;
+void main(){ vec2 q = gl_PointCoord*2.-1.; float r = dot(q,q); if (r>1.) discard;
+  float a = uMode > 1.5 ? smoothstep(1., .6, r) * smoothstep(.2, .6, r) : exp(-r*3.);
+  o = vec4(uCol * a * vA, 0.); }`;
+
+// ---------------- 4. SPRITES (light orb, home glow, flash) ----------------
+const SPR_VS = `#version 300 es
+in vec2 aPos; uniform mat4 uProj, uView; uniform vec4 uS; out vec2 vQ;
+void main(){ vQ = aPos; gl_Position = uProj * uView * vec4(uS.xyz + vec3(aPos*uS.w, 0.), 1.); }`;
+const SPR_FS = `#version 300 es
+precision highp float; in vec2 vQ; out vec4 o; uniform vec4 uC; uniform float uKind;
+void main(){ float r = length(vQ); float a;
+  if (uKind < 0.5) a = exp(-r*r*7.) + exp(-r*r*60.)*1.5;
+  else a = smoothstep(.75, .92, r) * smoothstep(1., .93, r);
+  o = vec4(uC.rgb * a * uC.a, 0.); }`;
+
+// ---------------- 5. OVERLAY (god rays from the surface, vignette) ----------------
+const OVL_FS = `#version 300 es
+precision highp float; in vec2 vUv; out vec4 o;
+uniform vec2 uSunUv; uniform float uAspect, uTime;
+float h1(float x){ return fract(sin(x*127.1)*43758.5453); }
+float n1(float x){ float i=floor(x), f=fract(x); f=f*f*(3.-2.*f); return mix(h1(i), h1(i+1.), f); }
+void main(){
+  vec2 d = (vUv - uSunUv) * vec2(uAspect, 1.);
+  float ang = atan(d.x, -d.y);
+  float r = n1(ang*22. + uTime*0.12)*0.55 + n1(ang*53. - uTime*0.2)*0.35 + n1(ang*9. + uTime*0.05)*0.5;
+  r = pow(max(r - 0.45, 0.), 2.) * 2.2;
+  float L = length(d);
+  float rays = r * exp(-L*0.95) * smoothstep(0.15, 0.6, L);
+  float glare = exp(-L*2.2)*0.35;
+  float vig = smoothstep(0.55, 1.35, length((vUv-vec2(.5,.55))*vec2(uAspect*0.8,1.)))*0.55;
+  vec3 col = vec3(0.85,1.0,1.0)*(rays*0.9 + glare) + vec3(0.0,0.06,0.12)*vig;
+  o = vec4(col, vig);
+}`;
+
+let P = {};
+let quadBuf, squareBuf;
+
+// ---------------- geometry builders (flat-shaded low poly) ----------------
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],
+      mul=(a,s)=>[a[0]*s,a[1]*s,a[2]*s], cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+      mix3=(a,b,k)=>[lerp(a[0],b[0],k),lerp(a[1],b[1],k),lerp(a[2],b[2],k)];
+function Geo(){ return { p:[], n:[], c:[] }; }
+function tri(g, a,b,c, ca,cb,cc){
+  const n = norm(cross(sub(b,a), sub(c,a)));
+  if (!isFinite(n[0])) return;
+  g.p.push(...a,...b,...c); g.n.push(...n,...n,...n); g.c.push(...ca,...(cb||ca),...(cc||ca));
+}
+function prism(g, a, b, r0, r1, sides, c0, c1, twist=0){
+  const ax = norm(sub(b,a)); let u = Math.abs(ax[1])<0.9 ? [0,1,0] : [1,0,0];
+  u = norm(cross(ax,u)); const v = cross(ax,u);
+  const ring = (c,r,off)=>Array.from({length:sides},(_,i)=>{ const th=i/sides*Math.PI*2+off; return add(c, add(mul(u,Math.cos(th)*r), mul(v,Math.sin(th)*r))); });
+  const A = ring(a,r0,0), B = ring(b,r1,twist);
+  for (let i=0;i<sides;i++){ const j=(i+1)%sides;
+    tri(g, A[i],A[j],B[j], c0,c0,c1); tri(g, A[i],B[j],B[i], c0,c1,c1); }
+  for (let i=1;i<sides-1;i++) tri(g, B[0],B[i],B[i+1], c1);
+}
+function bodyGeo(prof, widthK, colors, fins){
+  const g = Geo(), S = 6;
+  const rings = prof.map(([x,h])=>Array.from({length:S},(_,j)=>{ const th=j/S*Math.PI*2; return [x, Math.cos(th)*h, Math.sin(th)*h*widthK]; }));
+  const colAt = (p,h)=>{ const yn = h>0 ? p[1]/h : 0; return colors(yn, p[0]); };
+  for (let i=0;i<rings.length-1;i++){
+    const h0=prof[i][1]||1e-3, h1=prof[i+1][1]||1e-3;
+    for (let j=0;j<S;j++){ const k=(j+1)%S;
+      const a=rings[i][j], b=rings[i][k], c=rings[i+1][k], d=rings[i+1][j];
+      tri(g, a,b,c, colAt(a,h0),colAt(b,h0),colAt(c,h1)); tri(g, a,c,d, colAt(a,h0),colAt(c,h1),colAt(d,h1));
+    }
+  }
+  for (const f of fins) tri(g, f[0],f[1],f[2], f[3]);
+  return g;
+}
+function upload(g){
+  const o = { n: g.p.length/3 };
+  o.pos = buf(new Float32Array(g.p)); o.nor = buf(new Float32Array(g.n)); o.col = buf(new Float32Array(g.c));
+  return o;
+}
+const clamp01 = x => Math.min(1, Math.max(0, x));
+// silver jack-like schooling fish
+const FISH_GEO = () => bodyGeo(
+  [[1.0,0],[0.82,0.17],[0.5,0.31],[0.12,0.36],[-0.3,0.29],[-0.62,0.15],[-0.82,0.06]], 0.42,
+  (yn)=>{ const back=[0.20,0.33,0.46], silver=[0.80,0.88,0.92], belly=[0.97,0.98,0.99];
+    const c = mix3(belly, silver, clamp01((yn+0.7)/0.8));
+    return mix3(c, back, clamp01((yn-0.25)/0.55)); },
+  [ [[-0.8,0.05,0],[-1.22,0.42,0],[-1.05,0,0],[0.86,0.9,0.95]],
+    [[-0.8,-0.05,0],[-1.05,0,0],[-1.22,-0.42,0],[0.86,0.9,0.95]],
+    [[0.15,0.34,0],[-0.3,0.29,0],[-0.12,0.52,0],[0.35,0.48,0.6]],
+    [[0.0,-0.33,0],[-0.3,-0.28,0],[-0.2,-0.45,0],[0.9,0.92,0.95]] ]);
+const SHARK_GEO = () => bodyGeo(
+  [[1.0,0],[0.9,0.08],[0.68,0.15],[0.35,0.19],[0.0,0.18],[-0.35,0.13],[-0.7,0.06],[-0.88,0.035]], 0.85,
+  (yn)=>{ const back=[0.36,0.47,0.56], belly=[0.93,0.95,0.96]; return mix3(belly, back, clamp01((yn+0.05)/0.25)); },
+  [ [[0.15,0.17,0],[-0.18,0.5,0],[-0.22,0.15,0],[0.32,0.43,0.52]],
+    [[0.32,-0.12,0.08],[-0.05,-0.42,0.42],[0.1,-0.12,0.1],[0.4,0.5,0.58]],
+    [[0.32,-0.12,-0.08],[0.1,-0.12,-0.1],[-0.05,-0.42,-0.42],[0.4,0.5,0.58]],
+    [[-0.86,0.03,0],[-1.22,0.46,0],[-1.02,0.0,0],[0.34,0.45,0.54]],
+    [[-0.86,-0.03,0],[-1.02,0.0,0],[-1.16,-0.3,0],[0.38,0.48,0.56]],
+    [[-0.55,0.08,0],[-0.68,0.17,0],[-0.7,0.06,0],[0.34,0.45,0.54]] ]);
+
+// ---------------- reef builder ----------------
+let reef = null, sparkPts = null, homeWorld = [0,0,0];
+function coralTree(g, sparks, base, h, depth, cBase, cTip, spread, thick){
+  (function br(p, dir, len, r, d){
+    const e = add(p, mul(dir, len)), k0 = 1-(d+1)/(depth+1), k1 = 1-d/(depth+1);
+    prism(g, p, e, r, r*0.72, 5, mix3(cBase,cTip,k0), mix3(cBase,cTip,k1), 0.3);
+    if (Math.random()<0.6) sparks.push([...add(e, [rand(-r,r),rand(-r,r),rand(-r,r)]), rand(0.25,0.6)]);
+    if (d===0){ sparks.push([...e, rand(0.4,0.9)]); return; }
+    const kids = Math.random()<0.5 ? 3 : 2;
+    for (let i=0;i<kids;i++){
+      const nd = norm(add(dir, [rand(-spread,spread), rand(0.05,0.45), rand(-spread*0.8,spread*0.8)]));
+      br(e, nd, len*rand(0.72,0.9), r*0.76, d-1);
+    }
+  })(base, norm([rand(-0.25,0.25),1,rand(-0.2,0.2)]), h, thick, depth);
+}
+function buildReef(){
+  const g = Geo(), sparks = [];
+  const yb = YB - 0.2;
+  const hx = wx(home.x), r = home.r*K;
+  homeWorld = [hx, wy(home.y), 0];
+  const coralA=[0.78,0.30,0.27], coralTip=[1.15,0.88,0.62];
+  for (let i=0;i<4;i++){
+    const bx = hx + (i-1.5)*r*0.55 + rand(-r*0.15,r*0.15), bz = -3 - i*2.5 + rand(-1,1);
+    coralTree(g, sparks, [bx, yb, bz], r*rand(0.26,0.34), 5, coralA, coralTip, 1.0, r*0.13);
+  }
+  for (let i=0;i<70;i++){
+    const x = hx + rand(-r*1.6,r*1.6), z = rand(-9,4);
+    const c = Math.random()<0.5 ? [0.98,0.80,0.40] : [0.45,0.85,0.75];
+    prism(g, [x,yb,z], [x+rand(-.1,.1), yb+rand(0.4,0.9), z], 0.22, 0.32, 5, [0.9,0.55,0.3], c);
+  }
+  for (let i=0;i<80;i++){
+    const z = -rand(6, 120), sc = 1 + (-z)/D, x = rand(-HALFW*sc*1.2, HALFW*sc*1.2);
+    if (Math.abs(x - hx) < r*1.8 && z > -15) continue;
+    const kind = Math.random();
+    if (kind < 0.35){
+      const n = 2 + (Math.random()*4|0);
+      for (let j=0;j<n;j++){ const xx = x + rand(-1.6,1.6), zz = z + rand(-1.6,1.6), hh = rand(1.2,3.6);
+        prism(g, [xx,yb,zz], [xx, yb+hh, zz], 0.55, 0.48, 7, [0.42,0.32,0.75], [0.72,0.6,0.98]); }
+    } else if (kind < 0.7){
+      const c = Math.random()<0.6 ? [[0.85,0.8,0.82],[1,0.97,0.95]] : [[0.85,0.45,0.55],[1,0.75,0.8]];
+      coralTree(g, sparks, [x,yb,z], rand(0.9,1.6), 3, c[0], c[1], 0.9, 0.18);
+    } else if (kind < 0.85){
+      for (let j=0;j<3;j++){ let p=[x+j*0.5,yb,z], d=[rand(-.2,.2),1,0];
+        for (let s=0;s<7;s++){ const e=add(p,mul(norm(d),0.7)); prism(g,p,e,0.07,0.06,4,[0.2,0.25,0.33],[0.3,0.36,0.45]); p=e; d=add(d,[Math.sin(s+j)*0.35,0,0]); } }
+    } else {
+      if (z > -45) continue;
+      coralTree(g, sparks, [x,yb,z], rand(2.5,4), 4, [0.72,0.36,0.48], [1.05,0.8,0.78], 1.0, 0.75);
+    }
+  }
+  if (reef){ gl.deleteBuffer(reef.pos); gl.deleteBuffer(reef.nor); gl.deleteBuffer(reef.col); }
+  reef = upload(g);
+  const sp = new Float32Array(sparks.length*5);
+  sparks.forEach((s,i)=>{ sp.set([s[0],s[1],s[2], s[3]*0.8, Math.random()], i*5); });
+  if (sparkPts) gl.deleteBuffer(sparkPts.b);
+  sparkPts = { b: buf(sp), n: sparks.length };
+}
+
+let rocks = [], rockShape = [], arch = [0,0,0,0];
+function buildRocks(){
+  const s = home.side==='left' ? 1 : -1;
+  arch = [ -s*25, YB-6, -175, 40 ];
+  rocks = [
+    [ s*HALFW*0.95, YB-2, -125, 92 ], [ -s*150, YB-2, -380, 120 ], [ s*175, YB-2, -460, 80 ],
+    [ s*20, YB-2, -560, 60 ], [ -s*260, YB-2, -300, 70 ], [0,0,0,0] ];
+  rockShape = [ [14,7.5,21,1], [18,10,26,2], [12,7,17,3], [10,6,14,4], [12,7,16,5], [1,1,1,0] ];
+}
+
+// ---------------- snow & far schools ----------------
+let snowB, snowN = 700, bubbleList = [];
+function buildSnow(){
+  const a = new Float32Array(snowN*5);
+  for (let i=0;i<snowN;i++){ a.set([rand(-200,200), rand(YB, YT+40), rand(-250, 40), rand(0.25,0.6), Math.random()], i*5); }
+  snowB = { data:a, b: buf(a, gl.DYNAMIC_DRAW) };
+}
+const FAR = 260; let farFish = [];
+function buildFar(){
+  farFish = [];
+  for (let s=0;s<4;s++){
+    const cx = rand(-150,150), cy = rand(YB+15, YT), cz = rand(-90,-230), dir = Math.random()<.5?-1:1, sp = rand(0.04,0.09);
+    for (let i=0;i<FAR/4;i++) farFish.push({ cx, cy, cz, dir, sp, ox:rand(-12,12), oy:rand(-5,5), oz:rand(-6,6), ph:rand(0,6) });
+  }
+}
+
+// ---------------- GL setup ----------------
+let fishMesh, sharkMesh, instB, instData, sharkInstB, farInstB, farInstData, bubbleB;
+function setupGL(){
+  P.env = prog(ENV_VS, ENV_FS);
+  P.stat = prog(STATIC_VS, STATIC_FS);
+  P.fish = prog(FISH_VS, FISH_FS);
+  P.pts = prog(PTS_VS, PTS_FS);
+  P.spr = prog(SPR_VS, SPR_FS);
+  P.ovl = prog(ENV_VS, OVL_FS);
+  quadBuf = buf(new Float32Array([-1,-1, 3,-1, -1,3]));
+  squareBuf = buf(new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]));
+  fishMesh = upload(FISH_GEO()); sharkMesh = upload(SHARK_GEO());
+  instData = new Float32Array(400*10); instB = buf(instData, gl.DYNAMIC_DRAW);
+  sharkInstB = buf(new Float32Array(4*10), gl.DYNAMIC_DRAW);
+  farInstData = new Float32Array(FAR*10); farInstB = buf(farInstData, gl.DYNAMIC_DRAW);
+  bubbleB = buf(new Float32Array(600*5), gl.DYNAMIC_DRAW);
+  P.fishVao = makeFishVao(fishMesh, instB); P.sharkVao = makeFishVao(sharkMesh, sharkInstB); P.farVao = makeFishVao(fishMesh, farInstB);
+  buildSnow(); buildFar();
+}
+function makeFishVao(mesh, ib){
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const p = P.fish, L = n => gl.getAttribLocation(p, n);
+  attr(L('aPos'), mesh.pos, 3); attr(L('aNor'), mesh.nor, 3); attr(L('aCol'), mesh.col, 3);
+  attr(L('iPos'), ib, 3, 1, 40, 0); attr(L('iRot'), ib, 3, 1, 40, 12); attr(L('iTint'), ib, 4, 1, 40, 24);
+  gl.bindVertexArray(null); return vao;
+}
+// one VAO for "loose" attribute setups so they never touch the fish VAOs
+let looseVao;
+
+// ---------------- matrices ----------------
+const proj = new Float32Array(16), view = new Float32Array(16);
+function setCamera(){
+  const n = 1, f = 3000;
+  const l = -HALFW*n/D, r = HALFW*n/D, tp = YT*n/D, b = YB*n/D;
+  proj.set([2*n/(r-l),0,0,0, 0,2*n/(tp-b),0,0, (r+l)/(r-l),(tp+b)/(tp-b),-(f+n)/(f-n),-1, 0,0,-2*f*n/(f-n),0]);
+  view.set([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,-D,1]);
+}
+function sunScreen(){
+  const z = -SUN[2]*1000 + D;           // distance along -z from the camera
+  const x = SUN[0]*1000 / z * D, y = SUN[1]*1000 / z * D;
+  return [ (x/HALFW+1)/2, (y - YB)/(YT-YB) ];
+}
+
+// =====================================================================
+//  GAME STATE + SIMULATION (screen-pixel space)
+// =====================================================================
+const VIEW = 58, SEP = 20, SHARK_SIGHT = 170, LIGHT_R = 240;
+const CALM_SPEED = 1.9, PANIC_SPEED = 4.0;
+let fish = [], sharks = [], home = null, level = 1, playing = false, lostCount = 0, target = 0;
+let flashes = [], warnEls = [], nextSharkIn = 0;
+const lamp = { x: 0, y: 0, tx: 0, ty: 0, cooldown: 0, active: false, glow: 0 };
+
+function placeHome(newSide){
+  if (!home || newSide) home = { side: Math.random()<.5 ? 'left':'right' };
+  home.r = Math.max(85, Math.min(125, Math.min(W,H)*0.16));
+  home.x = home.side==='left' ? home.r+50 : W-home.r-50;
+  home.y = H - home.r*0.95;
+  buildRocks(); buildReef();
+}
+function resize(){
+  DPR = Math.min(devicePixelRatio||1, CAPTURE ? 1 : 1.5);
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  HALFW = (YT-YB)/2 * W/H; K = (YT-YB)/H;
+  setCamera();
+  if (gl) placeHome(false);
+}
+addEventListener('resize', resize);
+
+function newFish(x,y){ return { x, y, vx:rand(-1,1), vy:rand(-1,1), fear:0, saved:false, dead:false,
+  ph:rand(0,6), size:rand(19,27), z:rand(-4,4), roll:0 }; }
+
+function startLevel(){
+  fish = []; sharks = []; flashes = []; lostCount = 0; clearWarn();
+  placeHome(true);
+  const n = Math.min(110 + level*20, 200);
+  target = Math.ceil(n * Math.min(0.55 + level*0.05, 0.8));
+  const sx = home.side==='left' ? W*0.76 : W*0.24, sy = H*0.3;
+  for (let i=0;i<n;i++){ const a=rand(0,7), d=rand(0,90); fish.push(newFish(sx+Math.cos(a)*d, sy+Math.sin(a)*d*0.7)); }
+  nextSharkIn = level===1 ? 260 : 160;
+  lamp.cooldown = 0;
+  $('lvlLabel').textContent = 'Level ' + level;
+  $('sTarget').textContent = target;
+  $('barMark').style.left = (target/n*100) + '%';
+  playing = true;
+}
+
+function pointer(e){ lamp.tx = e.clientX; lamp.ty = e.clientY; lamp.active = true; }
+addEventListener('pointermove', pointer);
+cv.addEventListener('pointerdown', e=>{ pointer(e); flash(); });
+function flash(){
+  if (!playing || lamp.cooldown>0) return;
+  lamp.cooldown = 240;
+  flashes.push({ x:lamp.x, y:lamp.y, r:0.2, a:1 });
+  for (const s of sharks) if (Math.hypot(s.x-lamp.x, s.y-lamp.y) < 320){ s.state='flee'; s.timer=170; }
+  $('tip').style.opacity = 0;
+}
+
+function clearWarn(){ warnEls.forEach(w=>w.el.remove()); warnEls = []; }
+function spawnShark(){
+  const L = fish.filter(f=>!f.dead&&!f.saved); let cx=W/2, cy=H*0.4;
+  if (L.length){ cx=L.reduce((s,f)=>s+f.x,0)/L.length; cy=L.reduce((s,f)=>s+f.y,0)/L.length; }
+  const fromLeft = cx > W/2, y = Math.max(H*0.12, Math.min(H*0.7, cy + rand(-60,60)));
+  const el = document.createElement('div'); el.className='warn';
+  el.style.left = (fromLeft ? 30 : W-30)+'px'; el.style.top = y+'px'; document.body.appendChild(el);
+  warnEls.push({ el, life: 90 });
+  sharks.push({ x: fromLeft ? -260 : W+260, y, vx: fromLeft?2:-2, vy:0, state:'enter', wait:90,
+    timer: 900 + level*120, full:0, ph:0, speed: 2.3 + Math.min(level,6)*0.12, roll: fromLeft?0:Math.PI });
+}
+
+function updateShark(s){
+  s.ph += 0.09;
+  if (s.state==='enter'){ if (--s.wait<=0) s.state='hunt'; return; }
+  let ax=0, ay=0, spd = s.speed;
+  if (s.full>0){ s.full--; spd *= 0.55; }
+  s.timer--;
+  if (s.state==='hunt'){
+    let best=null, bd=1e9;
+    for (const f of fish){ if (f.dead||f.saved) continue; const d=(f.x-s.x)**2+(f.y-s.y)**2; if (d<bd){bd=d;best=f;} }
+    if (best){ const dx=best.x-s.x, dy=best.y-s.y, d=Math.hypot(dx,dy)||1; ax+=dx/d*0.085; ay+=dy/d*0.085; }
+    if (s.timer<=0 || !best) s.state='leave';
+  } else if (s.state==='flee'){
+    const dx=s.x-lamp.x, dy=s.y-lamp.y, d=Math.hypot(dx,dy)||1;
+    ax+=dx/d*0.25; ay+=dy/d*0.25; spd*=1.6;
+    if (--s.timer<=0){ s.state='hunt'; s.timer=500; }
+  } else {
+    ax += (s.x < W/2 ? -1 : 1)*0.12;
+    if (s.x<-300 || s.x>W+300) s.gone=true;
+  }
+  const hx=s.x-home.x, hy=s.y-home.y, hd=Math.hypot(hx,hy)||1;
+  if (hd < home.r+90){ const k=(home.r+90-hd)/40; ax+=hx/hd*0.3*k; ay+=hy/hd*0.3*k; }
+  if (s.state!=='leave'){ if (s.y<60) ay+=0.1; if (s.y>H-70) ay-=0.14; }
+  s.vx+=ax; s.vy+=ay;
+  const v=Math.hypot(s.vx,s.vy)||1; s.vx=s.vx/v*spd; s.vy=s.vy/v*spd;
+  s.x+=s.vx; s.y+=s.vy;
+  s.roll = lerp(s.roll, s.vx<0 ? Math.PI : 0, 0.05);
+  if (s.full<=0){
+    for (const f of fish){
+      if (f.dead||f.saved) continue;
+      if (Math.hypot(f.x-(s.x+s.vx*16), f.y-(s.y+s.vy*16)) < 26){
+        f.dead=true; lostCount++; s.full=50;
+        for (let k=0;k<8;k++) bubbleList.push({ x:wx(f.x)+rand(-.5,.5), y:wy(f.y), z:f.z*0.3, vy:rand(.04,.1), life:90, s:rand(.3,.6) });
+        break;
+      }
+    }
+  }
+}
+
+function updateFish(){
+  const live = fish.filter(f=>!f.dead);
+  const cs = VIEW, cols = Math.ceil(W/cs)+4, grid = new Map();
+  const key = (gx,gy)=> (gx+2) + (gy+2)*cols;
+  for (const f of live){ const k = key(Math.floor(f.x/cs), Math.floor(f.y/cs)); let c = grid.get(k); if (!c) grid.set(k, c=[]); c.push(f); }
+  for (const f of live){
+    let ax=0, ay=0, sx=0, sy=0, avx=0, avy=0, cx=0, cy=0, n=0, nearFear=0;
+    const gx=Math.floor(f.x/cs), gy=Math.floor(f.y/cs);
+    for (let oy=-1;oy<=1;oy++) for (let ox=-1;ox<=1;ox++){
+      const cell = grid.get(key(gx+ox, gy+oy)); if (!cell) continue;
+      for (const o of cell){
+        if (o===f) continue;
+        const dx=o.x-f.x, dy=o.y-f.y, d2=dx*dx+dy*dy;
+        if (d2 > VIEW*VIEW) continue;
+        n++; avx+=o.vx; avy+=o.vy; cx+=dx; cy+=dy;
+        if (o.fear>nearFear) nearFear=o.fear;
+        // RULE 1 — AVOID
+        if (d2 < SEP*SEP){ const d=Math.sqrt(d2)||.01; sx-=dx/d*(SEP-d)/SEP; sy-=dy/d*(SEP-d)/SEP; }
+      }
+    }
+    // RULE 6 — PANIC spreads and fades
+    f.fear = Math.max(f.fear*0.988, nearFear*0.93);
+    // RULE 5 — FLEE
+    for (const s of sharks){
+      if (s.state==='enter') continue;
+      const dx=f.x-s.x, dy=f.y-s.y, d=Math.hypot(dx,dy)||1;
+      if (d < SHARK_SIGHT){ f.fear=1; const k=1-d/SHARK_SIGHT; ax+=dx/d*0.6*k; ay+=dy/d*0.6*k; }
+    }
+    const calm = 1 - f.fear;
+    ax += sx*0.4*(1+f.fear); ay += sy*0.4*(1+f.fear);
+    if (n){
+      // RULE 2 — FOLLOW
+      ax += (avx/n - f.vx)*0.06*calm; ay += (avy/n - f.vy)*0.06*calm;
+      // RULE 3 — TOGETHER
+      ax += (cx/n)*0.003*calm; ay += (cy/n)*0.003*calm;
+    }
+    if (f.saved){
+      const dx=home.x-f.x, dy=(home.y-home.r*0.25)-f.y, d=Math.hypot(dx,dy)||1, k=Math.max(0,(d-home.r*0.5)/home.r);
+      ax += dx/d*0.05*k - dy/d*0.025; ay += dy/d*0.05*k + dx/d*0.025;
+    } else if (lamp.active){
+      // RULE 4 — LIGHT
+      const dx=lamp.x-f.x, dy=lamp.y-f.y, d=Math.hypot(dx,dy)||1;
+      if (d < LIGHT_R){
+        const k = (d<45 ? 0.15 : 1) * (0.35+0.65*(1-d/LIGHT_R));
+        ax += dx/d*0.08*k*calm; ay += dy/d*0.08*k*calm;
+      }
+    }
+    f.ph += 0.18 + Math.hypot(f.vx,f.vy)*0.16;
+    ax += Math.cos(f.ph*0.11)*0.018; ay += Math.sin(f.ph*0.09)*0.018;
+    const m=40;
+    if (f.x<m) ax+=(m-f.x)*0.01; if (f.x>W-m) ax-=(f.x-(W-m))*0.01;
+    if (f.y<m) ay+=(m-f.y)*0.01; if (f.y>H-30) ay-=(f.y-(H-30))*0.02;
+    f.vx+=ax; f.vy+=ay;
+    const sp=Math.hypot(f.vx,f.vy)||1, max=lerp(CALM_SPEED,PANIC_SPEED,f.fear)*(f.saved?0.6:1);
+    const c = sp>max ? max/sp : sp<0.7 ? 0.7/sp : 1;
+    f.vx*=c; f.vy*=c; f.x+=f.vx; f.y+=f.vy;
+    f.roll = lerp(f.roll, f.vx<0 ? Math.PI : 0, 0.08);
+    if (!f.saved && Math.hypot(f.x-home.x, f.y-home.y) < home.r*0.9){
+      f.saved=true; f.fear=0;
+      bubbleList.push({ x:wx(f.x), y:wy(f.y), z:f.z*0.3, vy:rand(.05,.1), life:110, s:rand(.3,.5) });
+    }
+  }
+}
+
+// =====================================================================
+//  RENDER
+// =====================================================================
+function setCommon(p){
+  gl.useProgram(p);
+  const u = p.u;
+  if (u.uProj) gl.uniformMatrix4fv(u.uProj, false, proj);
+  if (u.uView) gl.uniformMatrix4fv(u.uView, false, view);
+  if (u.uCam) gl.uniform3f(u.uCam, 0, 0, D);
+  if (u.uSun) gl.uniform3fv(u.uSun, SUN);
+  if (u.uTime) gl.uniform1f(u.uTime, t/60);
+  if (u.uYb) gl.uniform1f(u.uYb, YB);
+  if (u.uLamp) gl.uniform4f(u.uLamp, wx(lamp.x), wy(lamp.y), 2, lamp.active ? lamp.glow : 0);
+}
+function loose(){ gl.bindVertexArray(looseVao); for (let j=0;j<8;j++) gl.disableVertexAttribArray(j); }
+
+function render(){
+  gl.viewport(0,0,cv.width,cv.height);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
+
+  // 1. environment
+  const pe = P.env; setCommon(pe);
+  gl.uniform1f(pe.u.uHalfW, HALFW); gl.uniform1f(pe.u.uYt, YT); gl.uniform1f(pe.u.uD, D);
+  gl.uniform4fv(pe.u.uRocks, new Float32Array(rocks.flat()));
+  gl.uniform4fv(pe.u.uRockShape, new Float32Array(rockShape.flat()));
+  gl.uniform4fv(pe.u.uArch, arch);
+  loose(); attr(gl.getAttribLocation(pe,'aPos'), quadBuf, 2);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // 2. meshes
+  gl.clear(gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+  const ps = P.stat; setCommon(ps);
+  loose();
+  attr(gl.getAttribLocation(ps,'aPos'), reef.pos, 3); attr(gl.getAttribLocation(ps,'aNor'), reef.nor, 3); attr(gl.getAttribLocation(ps,'aCol'), reef.col, 3);
+  gl.drawArrays(gl.TRIANGLES, 0, reef.n);
+
+  const pf = P.fish; setCommon(pf);
+  let i = 0;
+  for (const f of farFish){
+    const x = f.cx + f.ox + Math.sin(t*0.01 + f.ph)*2, y = f.cy + f.oy + Math.sin(t*0.013+f.ph*2)*1.5, z = f.cz + f.oz;
+    farInstData.set([x,y,z, f.dir>0?0:Math.PI, 0, 1.3, 0.55,0.62,0.7, f.ph + t*0.25], i*10); i++;
+    f.cx += f.dir*f.sp; if (f.cx > 280) f.cx = -280; if (f.cx < -280) f.cx = 280;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, farInstB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, farInstData);
+  gl.uniform1f(pf.u.uWag, 0.12); gl.uniform1f(pf.u.uSpec, 0.3);
+  gl.bindVertexArray(P.farVao); gl.drawArraysInstanced(gl.TRIANGLES, 0, fishMesh.n, farFish.length);
+
+  i = 0;
+  for (const f of fish){
+    if (f.dead) continue;
+    const k = f.fear, ang = Math.atan2(-f.vy, f.vx);
+    let r, g, b;
+    if (f.saved){ r=1.08; g=0.98; b=0.78; } else { r = 1 + k*0.12; g = 1 - k*0.18; b = 1 - k*0.28; }
+    instData.set([wx(f.x), wy(f.y), f.z, ang, f.roll, f.size/2.25*K, r,g,b, f.ph], i*10); i++;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, instB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, instData, 0, i*10);
+  gl.uniform1f(pf.u.uWag, 0.14); gl.uniform1f(pf.u.uSpec, 0.9);
+  gl.bindVertexArray(P.fishVao); gl.drawArraysInstanced(gl.TRIANGLES, 0, fishMesh.n, i);
+
+  if (sharks.length){
+    const sd = new Float32Array(sharks.length*10);
+    sharks.forEach((s,j)=>{ sd.set([wx(s.x), wy(s.y), -2, Math.atan2(-s.vy, s.vx), s.roll, 150/2.25*K, 1,1,1, s.ph], j*10); });
+    gl.bindBuffer(gl.ARRAY_BUFFER, sharkInstB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, sd);
+    gl.uniform1f(pf.u.uWag, 0.1); gl.uniform1f(pf.u.uSpec, 0.35);
+    gl.bindVertexArray(P.sharkVao); gl.drawArraysInstanced(gl.TRIANGLES, 0, sharkMesh.n, sharks.length);
+  }
+
+  // 3. points (additive)
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
+  const pp = P.pts; setCommon(pp);
+  gl.uniform1f(pp.u.uPx, cv.height / (YT-YB) * D);
+  const aP = gl.getAttribLocation(pp,'aPos'), aI = gl.getAttribLocation(pp,'aInfo');
+  const sdat = snowB.data;
+  for (let j=0;j<snowN;j++){ sdat[j*5+1] -= 0.012 + sdat[j*5+3]*0.01; sdat[j*5] += Math.sin(t*0.01 + j)*0.01;
+    if (sdat[j*5+1] < YB) sdat[j*5+1] = YT+40; }
+  gl.bindBuffer(gl.ARRAY_BUFFER, snowB.b); gl.bufferSubData(gl.ARRAY_BUFFER, 0, sdat);
+  loose(); attr(aP, snowB.b, 3, 0, 20, 0); attr(aI, snowB.b, 2, 0, 20, 12);
+  gl.uniform3f(pp.u.uCol, 0.55, 0.7, 0.75); gl.uniform1f(pp.u.uMode, 0);
+  gl.drawArrays(gl.POINTS, 0, snowN);
+  loose(); attr(aP, sparkPts.b, 3, 0, 20, 0); attr(aI, sparkPts.b, 2, 0, 20, 12);
+  gl.uniform3f(pp.u.uCol, 1.0, 0.95, 0.85); gl.uniform1f(pp.u.uMode, 1);
+  gl.drawArrays(gl.POINTS, 0, sparkPts.n);
+  if (t%14===0) bubbleList.push({ x: homeWorld[0]+rand(-6,6), y: YB+rand(1,4), z: rand(-6,0), vy: rand(.04,.09), life: 200, s: rand(.25,.55) });
+  bubbleList = bubbleList.filter(b=>(b.life--, b.y+=b.vy, b.x+=Math.sin(b.life*0.1)*0.02, b.life>0)).slice(-600);
+  if (bubbleList.length){
+    const bd = new Float32Array(bubbleList.length*5);
+    bubbleList.forEach((b,j)=>bd.set([b.x,b.y,b.z,b.s,0], j*5));
+    gl.bindBuffer(gl.ARRAY_BUFFER, bubbleB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, bd);
+    loose(); attr(aP, bubbleB, 3, 0, 20, 0); attr(aI, bubbleB, 2, 0, 20, 12);
+    gl.uniform3f(pp.u.uCol, 0.8, 0.95, 1.0); gl.uniform1f(pp.u.uMode, 2);
+    gl.drawArrays(gl.POINTS, 0, bubbleList.length);
+  }
+
+  // 4. sprites
+  gl.disable(gl.DEPTH_TEST);
+  const pr = P.spr; setCommon(pr);
+  loose(); attr(gl.getAttribLocation(pr,'aPos'), squareBuf, 2);
+  const sprite = (x,y,z,size,r,g,b,a,kind)=>{ gl.uniform4f(pr.u.uS, x,y,z,size); gl.uniform4f(pr.u.uC, r,g,b,a); gl.uniform1f(pr.u.uKind, kind); gl.drawArrays(gl.TRIANGLES,0,6); };
+  const pulse = 0.5+0.5*Math.sin(t*0.04);
+  sprite(homeWorld[0], homeWorld[1]-home.r*K*0.2, -1, home.r*K*1.7, 1.0,0.85,0.6, 0.22+pulse*0.08, 0);
+  sprite(homeWorld[0], homeWorld[1], -1, home.r*K*0.95, 1.0,0.95,0.85, 0.06+pulse*0.08, 1);
+  if (lamp.active){
+    const lx = wx(lamp.x), ly = wy(lamp.y);
+    sprite(lx, ly, 2, 9, 1.0,0.92,0.75, 0.55*lamp.glow, 0);
+    sprite(lx, ly, 2, 2.2, 1,1,1, 0.9*lamp.glow, 0);
+    const cd = lamp.cooldown>0 ? 0.25 : 0.55+0.25*Math.sin(t*0.12);
+    sprite(lx, ly, 2, 1.6, 1.0,0.95,0.8, cd, 1);
+  }
+  for (const f of flashes){ f.r += 3.2; f.a *= 0.9;
+    sprite(wx(f.x), wy(f.y), 2, f.r, 1,1,0.95, f.a, 1); sprite(wx(f.x), wy(f.y), 2, f.r*0.8, 1,1,0.95, f.a*0.35, 0); }
+  flashes = flashes.filter(f=>f.a>0.03);
+
+  // 5. overlay
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  const po = P.ovl; gl.useProgram(po);
+  const su = sunScreen();
+  gl.uniform2f(po.u.uSunUv, su[0], su[1]); gl.uniform1f(po.u.uAspect, W/H); gl.uniform1f(po.u.uTime, t/60);
+  loose(); attr(gl.getAttribLocation(po,'aPos'), quadBuf, 2); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.disable(gl.BLEND); gl.depthMask(true);
+}
+
+// =====================================================================
+//  HUD + LOOP
+// =====================================================================
+function updateHUD(){
+  let saved=0, alive=0;
+  for (const f of fish){ if (f.dead) continue; if (f.saved) saved++; else alive++; }
+  $('sHome').textContent=saved; $('sAlive').textContent=alive; $('sLost').textContent=lostCount;
+  $('barFill').style.width = (fish.length ? saved/fish.length*100 : 0)+'%';
+  if (!playing) return;
+  if (saved >= target) endLevel(true, saved);
+  else if (saved + alive < target) endLevel(false, saved);
+}
+function endLevel(win, saved){
+  playing=false;
+  setTimeout(()=>{
+    $('endTitle').textContent = win ? 'Home' : 'Scattered';
+    $('endText').textContent = win ? `${saved} fish reached the reef · ${lostCount} lost` : `${saved} of ${target} made it home`;
+    $('endBtn').textContent = win ? `Level ${level+1}` : 'Again';
+    $('endBtn').onclick = ()=>{ if (win) level++; $('end').classList.add('hide'); startLevel(); };
+    $('end').classList.remove('hide');
+  }, 1200);
+}
+$('startBtn').onclick = ()=>{ $('start').classList.add('hide'); startLevel(); };
+
+function step(){
+  t++;
+  lamp.x = lerp(lamp.x, lamp.tx, 0.22); lamp.y = lerp(lamp.y, lamp.ty, 0.22);
+  lamp.glow = lerp(lamp.glow, lamp.active ? 1 : 0, 0.05);
+  if (lamp.cooldown>0) lamp.cooldown--;
+  updateFish();
+  if (playing && --nextSharkIn <= 0){
+    if (sharks.length < (level>=3 ? 2 : 1)) spawnShark();
+    nextSharkIn = Math.max(360, 900 - level*80) + rand(0,240);
+  }
+  for (const s of sharks) updateShark(s);
+  sharks = sharks.filter(s=>!s.gone);
+  warnEls = warnEls.filter(w=>{ if (--w.life<=0){ w.el.remove(); return false; } return true; });
+  if (t%6===0) updateHUD();
+}
+function loop(){ step(); render(); requestAnimationFrame(loop); }
+
+// ---------------- boot ----------------
+if (gl){
+  looseVao = gl.createVertexArray();
+  setupGL();
+  resize();
+  lamp.x=lamp.tx=W*0.5; lamp.y=lamp.ty=H*0.42;
+  for (let i=0;i<90;i++) fish.push(newFish(W*0.5+rand(-150,150), H*0.4+rand(-70,70)));
+  if (new URLSearchParams(location.search).has('auto')){ $('start').classList.add('hide'); startLevel(); }
+  if (CAPTURE){ window.advance = n => { for (let i=0;i<n;i++) step(); render(); }; }
+  else loop();
+}
+</script>
+</body>
+</html>
