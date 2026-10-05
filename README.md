@@ -2,7 +2,7 @@
 
 A small game about emergent order: guide a school of fish home to a glowing reef. You can't steer the fish. You only hold a light, and the school decides for itself what to do with it.
 
-**Play:** https://YOUR-USERNAME.github.io/YOUR-REPO-NAME/
+**Play:** (https://chyanne88.github.io/tiny-ocean/ )
 
 ![teaser](teaser/teaser.gif)
 
